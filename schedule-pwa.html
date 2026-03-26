@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MySchedule">
+  <meta name="theme-color" content="#0D0D0D">
+  <title>MySchedule</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:#0D0D0D; --surface:#181818; --surface2:#222;
+      --border:rgba(255,255,255,0.07); --text:#F0EEE8; --muted:#888;
+      --accent:#E8540A; --blue:#3B82F6; --green:#10B981;
+      --purple:#8B5CF6; --yellow:#F59E0B; --sat:#60A5FA; --sun:#F87171;
+    }
+    html,body { background:var(--bg); color:var(--text); font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans','Noto Sans JP',sans-serif; min-height:100dvh; overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
+    #app { padding-bottom:100px; }
+
+    /* Header */
+    .header { padding:52px 18px 0; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+    .header-label { font-size:10px; color:var(--accent); letter-spacing:0.18em; text-transform:uppercase; margin-bottom:4px; }
+    .header-title { font-size:28px; font-weight:800; letter-spacing:-0.03em; line-height:1; }
+    .header-right { display:flex; align-items:center; gap:8px; flex-shrink:0; padding-top:20px; }
+    .nav-btn { background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:10px; width:36px; height:36px; font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+    /* Legend */
+    .legend { display:flex; gap:6px; padding:14px 18px 0; overflow-x:auto; scrollbar-width:none; }
+    .legend::-webkit-scrollbar { display:none; }
+    .legend-item { display:flex; align-items:center; gap:4px; border-radius:20px; padding:4px 10px; font-size:10px; white-space:nowrap; flex-shrink:0; font-weight:600; }
+
+    /* Calendar */
+    .cal-wrap { padding:14px 10px 0; }
+    .weekdays { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:4px; }
+    .weekday { text-align:center; font-size:10px; font-weight:700; padding:3px 0; color:var(--muted); }
+    .weekday.sat { color:var(--sat); } .weekday.sun { color:var(--sun); }
+    .grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+    .day-cell { min-height:70px; border-radius:8px; background:var(--surface); border:1px solid var(--border); padding:4px 3px; cursor:pointer; transition:all 0.15s; overflow:hidden; }
+    .day-cell.empty { opacity:0.08; cursor:default; pointer-events:none; }
+    .day-cell.today { border-color:rgba(255,255,255,0.15); background:rgba(255,255,255,0.04); }
+    .day-cell.selected { background:rgba(232,84,10,0.13); border-color:rgba(232,84,10,0.6); }
+    .day-cell:active { opacity:0.7; }
+    .day-num { font-size:11px; font-weight:500; color:#bbb; margin-bottom:3px; line-height:1; }
+    .day-num.sat-num { color:var(--sat); } .day-num.sun-num { color:var(--sun); }
+    .today-circle { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; background:var(--accent); color:#fff; border-radius:50%; font-size:10px; font-weight:800; }
+    .ev-chip { border-radius:3px; padding:1px 4px; font-size:8.5px; color:#fff; font-weight:700; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; margin-bottom:2px; }
+    .ev-more { font-size:8px; color:#555; }
+
+    /* Overlay & Drawer */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:50; display:flex; align-items:flex-end; }
+    .drawer { width:100%; background:#1c1c1c; border-radius:20px 20px 0 0; padding:18px 18px 48px; max-height:80dvh; overflow-y:auto; }
+    .drawer-handle { width:38px; height:4px; background:#333; border-radius:2px; margin:0 auto 16px; }
+    .drawer-title { font-weight:800; font-size:20px; margin-bottom:16px; }
+    .ev-card { background:var(--surface2); border-radius:10px; padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; border-left-width:3px; border-left-style:solid; }
+    .ev-card-icon { font-size:22px; flex-shrink:0; }
+    .ev-card-title { font-weight:700; font-size:15px; }
+    .ev-card-meta { font-size:11px; color:var(--muted); margin-top:3px; }
+
+    /* Add Form */
+    .add-form { margin-top:16px; display:flex; flex-direction:column; gap:10px; }
+    .form-title { font-weight:700; font-size:14px; color:var(--accent); margin-bottom:4px; }
+    .form-input { background:#111; border:1px solid #333; border-radius:10px; padding:11px 13px; color:var(--text); font-size:14px; outline:none; font-family:inherit; width:100%; }
+    .form-input::placeholder { color:#444; }
+    .form-select { background:#111; border:1px solid #333; border-radius:10px; padding:11px 13px; color:var(--text); font-size:14px; outline:none; font-family:inherit; width:100%; appearance:none; }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .form-label { font-size:11px; color:#666; margin-bottom:3px; }
+    .submit-btn { width:100%; background:var(--accent); color:#fff; border:none; border-radius:13px; padding:15px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; margin-top:4px; }
+    .submit-btn:active { opacity:0.85; }
+    .delete-btn { background:none; border:1px solid #444; border-radius:8px; color:#888; font-size:12px; padding:4px 10px; cursor:pointer; font-family:inherit; margin-top:4px; }
+
+    /* FAB */
+    .fab { position:fixed; bottom:24px; right:20px; z-index:60; width:58px; height:58px; border-radius:50%; border:none; cursor:pointer; font-size:24px; display:flex; align-items:center; justify-content:center; transition:all 0.2s; box-shadow:0 4px 24px rgba(232,84,10,0.45); background:linear-gradient(135deg,#E8540A,#FF8040); }
+
+    /* Toast */
+    .toast { position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:200; border-radius:14px; padding:11px 22px; font-size:13px; font-weight:600; color:#fff; white-space:nowrap; box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+    .toast.ok { background:#065F46; } .toast.warn { background:#78350F; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+var CATS = {
+  window:   { label:'窓リノベ',          color:'#E8540A', bg:'rgba(232,84,10,0.13)',  icon:'🪟' },
+  sales:    { label:'営業・商談',         color:'#3B82F6', bg:'rgba(59,130,246,0.13)', icon:'💼' },
+  personal: { label:'個人・プライベート', color:'#10B981', bg:'rgba(16,185,129,0.13)', icon:'🏠' },
+  travel:   { label:'旅行・外出',         color:'#8B5CF6', bg:'rgba(139,92,246,0.13)', icon:'✈️' },
+  other:    { label:'その他',            color:'#F59E0B', bg:'rgba(245,158,11,0.13)', icon:'📌' },
+};
+var WDAYS = ['日','月','火','水','木','金','土'];
+var MONS  = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+// LocalStorageからイベントを復元
+function loadEvents() {
+  try {
+    var saved = localStorage.getItem('schedule_events');
+    if(saved) return JSON.parse(saved);
+  } catch(e){}
+  return [
+    { id:'s1', date:'2026-03-26', title:'インプラス現場確認', category:'window',   time:'10:00' },
+    { id:'s2', date:'2026-03-27', title:'新規顧客商談',       category:'sales',    time:'14:00' },
+    { id:'s3', date:'2026-03-30', title:'ナポリへ出発',        category:'travel',   time:'09:00' },
+    { id:'s4', date:'2026-04-02', title:'補助金申請締切確認', category:'window',   time:'終日'  },
+    { id:'s5', date:'2026-04-06', title:'東京帰着',            category:'travel',   time:'18:00' },
+  ];
+}
+function saveEvents() {
+  try { localStorage.setItem('schedule_events', JSON.stringify(state.events)); } catch(e){}
+}
+
+var state = {
+  today: new Date(),
+  year:  new Date().getFullYear(),
+  month: new Date().getMonth(),
+  events: loadEvents(),
+  selDay: null,
+  drawerOpen: false,
+  formOpen: false,
+  toast: null,
+  toastTimer: null,
+  editId: null,
+};
+
+function daysIn(y,m)    { return new Date(y,m+1,0).getDate(); }
+function firstDow(y,m)  { return new Date(y,m,1).getDay(); }
+function dateStr(y,m,d) { return y+'-'+pad(m+1)+'-'+pad(d); }
+function pad(n)         { return String(n).padStart(2,'0'); }
+function getEvs(d)      { return state.events.filter(function(e){ return e.date===dateStr(state.year,state.month,d); }); }
+function isToday(d)     { var t=state.today; return d===t.getDate()&&state.month===t.getMonth()&&state.year===t.getFullYear(); }
+
+function flash(msg,warn) {
+  if(state.toastTimer) clearTimeout(state.toastTimer);
+  state.toast={msg:msg,warn:!!warn}; render();
+  state.toastTimer=setTimeout(function(){ state.toast=null; render(); },3000);
+}
+
+function render() {
+  var dim=daysIn(state.year,state.month), fd=firstDow(state.year,state.month);
+  var cells=Math.ceil((fd+dim)/7)*7;
+  var html='';
+
+  if(state.toast) html+='<div class="toast '+(state.toast.warn?'warn':'ok')+'">'+state.toast.msg+'</div>';
+
+  // Header
+  html+='<div class="header"><div>';
+  html+='<div class="header-label">MY SCHEDULE</div>';
+  html+='<div class="header-title">'+state.year+'年 '+MONS[state.month]+'</div>';
+  html+='</div><div class="header-right">';
+  html+='<button class="nav-btn" onclick="prevMonth()">‹</button>';
+  html+='<button class="nav-btn" onclick="nextMonth()">›</button>';
+  html+='</div></div>';
+
+  // Legend
+  html+='<div class="legend">';
+  for(var k in CATS){ var c=CATS[k];
+    html+='<div class="legend-item" style="background:'+c.bg+';border:1px solid '+c.color+'44;color:'+c.color+';">'+c.icon+' '+c.label+'</div>';
+  }
+  html+='</div>';
+
+  // Calendar
+  html+='<div class="cal-wrap"><div class="weekdays">';
+  for(var i=0;i<7;i++) html+='<div class="weekday'+(i===0?' sun':i===6?' sat':'')+'">'+WDAYS[i]+'</div>';
+  html+='</div><div class="grid">';
+
+  for(var ci=0;ci<cells;ci++){
+    var dn=ci-fd+1, valid=dn>=1&&dn<=dim;
+    var devs=valid?getEvs(dn):[], sel=valid&&state.selDay===dn, tod=valid&&isToday(dn), wd=ci%7;
+    var cls='day-cell'+(valid?'':' empty')+(tod?' today':'')+(sel?' selected':'');
+    html+='<div class="'+cls+'"'+(valid?' onclick="selectDay('+dn+')"':'')+' >';
+    if(valid){
+      var nc='day-num'+(wd===6?' sat-num':wd===0?' sun-num':'');
+      if(tod) html+='<div class="'+nc+'"><span class="today-circle">'+dn+'</span></div>';
+      else    html+='<div class="'+nc+'">'+dn+'</div>';
+      devs.slice(0,2).forEach(function(ev){
+        var ec=CATS[ev.category]||CATS.other;
+        html+='<div class="ev-chip" style="background:'+ec.color+'">'+ev.title+'</div>';
+      });
+      if(devs.length>2) html+='<div class="ev-more">+'+(devs.length-2)+'</div>';
+    }
+    html+='</div>';
+  }
+  html+='</div></div>';
+
+  // Drawer（日付タップ後）
+  if(state.drawerOpen && state.selDay){
+    var selEvs=getEvs(state.selDay);
+    html+='<div class="overlay" onclick="closeDrawer()"><div class="drawer" onclick="event.stopPropagation()">';
+    html+='<div class="drawer-handle"></div>';
+    html+='<div class="drawer-title">'+(state.month+1)+'月'+state.selDay+'日</div>';
+
+    if(selEvs.length===0) html+='<p style="color:#555;font-size:14px;margin-bottom:16px">予定はありません</p>';
+    selEvs.forEach(function(ev){
+      var c=CATS[ev.category]||CATS.other;
+      html+='<div class="ev-card" style="border-left-color:'+c.color+'">';
+      html+='<div class="ev-card-icon">'+c.icon+'</div>';
+      html+='<div style="flex:1"><div class="ev-card-title">'+escHtml(ev.title)+'</div>';
+      html+='<div class="ev-card-meta">'+ev.time+' · <span style="color:'+c.color+'">'+c.label+'</span></div>';
+      html+='</div><button class="delete-btn" onclick="deleteEv(\''+ev.id+'\')">削除</button></div>';
+    });
+
+    // 追加フォーム
+    if(state.formOpen){
+      var dd=dateStr(state.year,state.month,state.selDay);
+      html+='<div class="add-form">';
+      html+='<div class="form-title">＋ 予定を追加</div>';
+      html+='<div><div class="form-label">タイトル</div><input class="form-input" id="f-title" type="text" placeholder="例：現場確認" value=""></div>';
+      html+='<div class="form-row">';
+      html+='<div><div class="form-label">時間</div><input class="form-input" id="f-time" type="time" value="10:00"></div>';
+      html+='<div><div class="form-label">カテゴリ</div><select class="form-select" id="f-cat">';
+      for(var ck in CATS) html+='<option value="'+ck+'">'+CATS[ck].icon+' '+CATS[ck].label+'</option>';
+      html+='</select></div></div>';
+      html+='<button class="submit-btn" onclick="addEvent()">追加する</button>';
+      html+='</div>';
+    } else {
+      html+='<button class="submit-btn" onclick="openForm()">＋ 予定を追加</button>';
+    }
+    html+='</div></div>';
+  }
+
+  // FAB
+  html+='<button class="fab" onclick="goToday()">📅</button>';
+
+  document.getElementById('app').innerHTML=html;
+}
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function prevMonth(){ if(state.month===0){state.year--;state.month=11;}else{state.month--;} state.selDay=null; render(); }
+function nextMonth(){ if(state.month===11){state.year++;state.month=0;}else{state.month++;} state.selDay=null; render(); }
+function selectDay(d){ state.selDay=d; state.drawerOpen=true; state.formOpen=false; render(); }
+function closeDrawer(){ state.drawerOpen=false; state.formOpen=false; render(); }
+function openForm(){ state.formOpen=true; render(); setTimeout(function(){ var el=document.getElementById('f-title'); if(el) el.focus(); },100); }
+function goToday(){ state.year=state.today.getFullYear(); state.month=state.today.getMonth(); state.selDay=null; render(); }
+
+function addEvent(){
+  var title=document.getElementById('f-title').value.trim();
+  if(!title){ flash('タイトルを入力してください',true); return; }
+  var time=document.getElementById('f-time').value||'終日';
+  var cat=document.getElementById('f-cat').value;
+  var nev={ id:'e'+Date.now(), date:dateStr(state.year,state.month,state.selDay), title:title, time:time, category:cat };
+  state.events=state.events.concat([nev]);
+  saveEvents();
+  state.formOpen=false;
+  flash('✅ 追加しました！');
+  render();
+}
+
+function deleteEv(id){
+  if(!confirm('この予定を削除しますか？')) return;
+  state.events=state.events.filter(function(e){ return e.id!==id; });
+  saveEvents();
+  flash('削除しました');
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
