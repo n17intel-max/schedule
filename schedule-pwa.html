@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MySchedule">
+  <meta name="theme-color" content="#0D0D0D">
+  <title>MySchedule</title>
+
+  <!-- PWA Manifest (inline) -->
+  <link rel="manifest" href="data:application/json,{
+    %22name%22:%22MySchedule%22,
+    %22short_name%22:%22Schedule%22,
+    %22start_url%22:%22.%22,
+    %22display%22:%22standalone%22,
+    %22background_color%22:%22%230D0D0D%22,
+    %22theme_color%22:%22%23E8540A%22
+  }">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0D0D0D;
+      --surface:  #181818;
+      --surface2: #222222;
+      --border:   rgba(255,255,255,0.07);
+      --text:     #F0EEE8;
+      --muted:    #888;
+      --accent:   #E8540A;
+      --blue:     #3B82F6;
+      --green:    #10B981;
+      --purple:   #8B5CF6;
+      --yellow:   #F59E0B;
+      --sat:      #60A5FA;
+      --sun:      #F87171;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app { padding-bottom: 100px; }
+
+    /* ── Header ─────────────────────────────── */
+    .header {
+      padding: 52px 18px 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .header-label {
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .header-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      padding-top: 20px;
+    }
+    .gcal-badge {
+      font-size: 10px;
+      color: var(--blue);
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 8px;
+      padding: 4px 9px;
+      white-space: nowrap;
+    }
+    .nav-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      width: 36px;
+      height: 36px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+    .nav-btn:active { background: #2a2a2a; }
+
+    /* ── Legend ─────────────────────────────── */
+    .legend {
+      display: flex;
+      gap: 6px;
+      padding: 14px 18px 0;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .legend::-webkit-scrollbar { display: none; }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 10px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+
+    /* ── Calendar ───────────────────────────── */
+    .cal-wrap { padding: 14px 10px 0; }
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-bottom: 4px;
+    }
+    .weekday {
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 0;
+      color: var(--muted);
+    }
+    .weekday.sat { color: var(--sat); }
+    .weekday.sun { color: var(--sun); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .day-cell {
+      min-height: 70px;
+      border-radius: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 4px 3px;
+      cursor: pointer;
+      transition: all 0.15s;
+      overflow: hidden;
+    }
+    .day-cell.empty { opacity: 0.08; cursor: default; pointer-events: none; }
+    .day-cell.today { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); }
+    .day-cell.selected { background: rgba(232,84,10,0.13); border-color: rgba(232,84,10,0.6); }
+    .day-cell:active { opacity: 0.7; }
+
+    .day-num {
+      font-size: 11px;
+      font-weight: 500;
+      color: #bbb;
+      margin-bottom: 3px;
+      line-height: 1;
+    }
+    .day-num.sat-num { color: var(--sat); }
+    .day-num.sun-num { color: var(--sun); }
+    .today-circle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .ev-chip {
+      border-radius: 3px;
+      padding: 1px 4px;
+      font-size: 8.5px;
+      color: #fff;
+      font-weight: 700;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .ev-more { font-size: 8px; color: #555; }
+
+    /* ── Drawer ─────────────────────────────── */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 50;
+      display: flex;
+      align-items: flex-end;
+    }
+    .drawer {
+      width: 100%;
+      background: #1c1c1c;
+      border-radius: 20px 20px 0 0;
+      padding: 18px 18px 48px;
+      max-height: 65dvh;
+      overflow-y: auto;
+    }
+    .drawer-handle {
+      width: 38px;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      margin: 0 auto 16px;
+    }
+    .drawer-title { font-weight: 800; font-size: 20px; margin-bottom: 16px; }
+    .ev-card {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-left-width: 3px;
+      border-left-style: solid;
+    }
+    .ev-card-icon { font-size: 22px; flex-shrink: 0; }
+    .ev-card-title { font-weight: 700; font-size: 15px; }
+    .ev-card-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .ev-card-meta .cat { font-weight: 600; }
+    .synced-badge { color: var(--blue); margin-left: 6px; }
+    .syncing-badge { color: var(--yellow); margin-left: 6px; }
+
+    .add-btn {
+      margin-top: 14px;
+      width: 100%;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 13px;
+      padding: 15px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .add-btn:active { opacity: 0.85; }
+
+    /* ── Chat ───────────────────────────────── */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      z-index: 60;
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      border: none;
+      cursor: pointer;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      box-shadow: 0 4px 24px rgba(232,84,10,0.45);
+    }
+    .fab.open { background: #2a2a2a; box-shadow: none; }
+    .fab.closed { background: linear-gradient(135deg, #E8540A, #FF8040); }
+
+    .chat-panel {
+      position: fixed;
+      bottom: 94px;
+      left: 14px;
+      right: 14px;
+      z-index: 55;
+      background: #1a1a1a;
+      border-radius: 18px;
+      border: 1px solid #2a2a2a;
+      box-shadow: 0 8px 48px rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      max-height: 52dvh;
+    }
+    .chat-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid #242424;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-head-title { font-weight: 700; font-size: 13px; color: var(--accent); }
+    .chat-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scrollbar-width: none;
+    }
+    .chat-body::-webkit-scrollbar { display: none; }
+    .bubble {
+      max-width: 88%;
+      border-radius: 14px;
+      padding: 9px 13px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .bubble.user { align-self: flex-end; background: var(--accent); color: #fff; }
+    .bubble.ai   { align-self: flex-start; background: #242424; color: var(--text); }
+    .typing { align-self: flex-start; color: #555; font-size: 12px; padding: 4px 8px; }
+
+    .chat-foot {
+      padding: 10px 12px;
+      border-top: 1px solid #242424;
+      display: flex;
+      gap: 8px;
+    }
+    .chat-input {
+      flex: 1;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 11px;
+      padding: 10px 13px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+    .chat-input::placeholder { color: #444; }
+    .send-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: 11px;
+      width: 44px;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .send-btn:disabled { opacity: 0.45; }
+
+    /* ── Toast ──────────────────────────────── */
+    .toast {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 200;
+      border-radius: 14px;
+      padding: 11px 22px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      animation: fadeToast 0.25s ease;
+    }
+    .toast.ok   { background: #065F46; }
+    .toast.warn { background: #78350F; }
+    @keyframes fadeToast {
+      from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    /* ── How-to Banner ──────────────────────── */
+    .howto {
+      margin: 16px 18px 0;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: #8ab4f8;
+      line-height: 1.7;
+    }
+    .howto strong { color: var(--blue); }
+    .howto-close {
+      float: right;
+      background: none;
+      border: none;
+      color: #555;
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+      margin-left: 8px;
+    }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ── データ ────────────────────────────────────────────────────
+var CATS = {
+  window:   { label:'窓リノベ',          color:'#E8540A', bg:'rgba(232,84,10,0.13)',  icon:'🪟', gcalColor:'6'  },
+  sales:    { label:'営業・商談',         color:'#3B82F6', bg:'rgba(59,130,246,0.13)', icon:'💼', gcalColor:'9'  },
+  personal: { label:'個人・プライベート', color:'#10B981', bg:'rgba(16,185,129,0.13)', icon:'🏠', gcalColor:'10' },
+  travel:   { label:'旅行・外出',         color:'#8B5CF6', bg:'rgba(139,92,246,0.13)', icon:'✈️', gcalColor:'3'  },
+  other:    { label:'その他',            color:'#F59E0B', bg:'rgba(245,158,11,0.13)', icon:'📌', gcalColor:'5'  },
+};
+var WDAYS = ['月','火','水','木','金','土','日'];
+var MONS  = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+var state = {
+  today: new Date(),
+  year:  new Date().getFullYear(),
+  month: new Date().getMonth(),
+  events: [
+    { id:'s1', date:'2026-03-26', title:'インプラス現場確認', category:'window',   time:'10:00', synced:false, syncing:false },
+    { id:'s2', date:'2026-03-27', title:'新規顧客商談',       category:'sales',    time:'14:00', synced:false, syncing:false },
+    { id:'s3', date:'2026-03-30', title:'ナポリへ出発',        category:'travel',   time:'09:00', synced:true,  syncing:false },
+    { id:'s4', date:'2026-04-02', title:'補助金申請締切確認', category:'window',   time:'終日',  synced:false, syncing:false },
+    { id:'s5', date:'2026-04-06', title:'東京帰着',            category:'travel',   time:'18:00', synced:false, syncing:false },
+  ],
+  selDay: null,
+  drawerOpen: false,
+  chatOpen: false,
+  msgs: [{ role:'ai', text:'こんにちは！予定を話しかけるだけでGoogleカレンダーにも自動登録します 📅\n\n例：「4月10日 13時に現場確認（窓リノベ）」' }],
+  inp: '',
+  busy: false,
+  toast: null,
+  toastTimer: null,
+  showHowto: true,
+  CLAUDE_API_KEY: '',  // ← ご自身のAPIキーをここに入れてください
+};
+
+// ── ユーティリティ ────────────────────────────────────────────
+function daysIn(y,m)    { return new Date(y,m+1,0).getDate(); }
+function firstDow(y,m)  { var d=new Date(y,m,1).getDay(); return d===0?6:d-1; }
+function dateStr(y,m,d) { return y+'-'+pad(m+1)+'-'+pad(d); }
+function pad(n)         { return String(n).padStart(2,'0'); }
+function getEvs(d)      { var s=dateStr(state.year,state.month,d); return state.events.filter(function(e){return e.date===s;}); }
+function isToday(d)     { var t=state.today; return d===t.getDate()&&state.month===t.getMonth()&&state.year===t.getFullYear(); }
+
+function flash(msg, warn) {
+  if(state.toastTimer) clearTimeout(state.toastTimer);
+  state.toast = { msg:msg, warn:!!warn };
+  render();
+  state.toastTimer = setTimeout(function(){ state.toast=null; render(); }, 3500);
+}
+
+// ── Claude API ────────────────────────────────────────────────
+async function askClaude(system, userMsg) {
+  var key = state.CLAUDE_API_KEY || localStorage.getItem('claude_api_key') || '';
+  var headers = { 'Content-Type':'application/json' };
+  if(key) headers['x-api-key'] = key;
+  var r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST', headers:headers,
+    body: JSON.stringify({
+      model:'claude-sonnet-4-20250514', max_tokens:1000,
+      system:system, messages:[{role:'user',content:userMsg}]
+    })
+  });
+  var d = await r.json();
+  return ((d.content||[]).map(function(b){return b.text||'';}).join('')).replace(/```json|```/g,'').trim();
+}
+
+async function syncToGcal(ev) {
+  var cat = CATS[ev.category]||CATS.other;
+  var isAll = !ev.time||ev.time==='終日';
+  var parts = (ev.time&&ev.time!=='終日') ? ev.time.split(':') : ['9','0'];
+  var hh=parts[0], mm=pad(parseInt(parts[1]||0));
+  var endH=pad(parseInt(hh)+1);
+  var payload = {
+    summary: cat.icon+' '+ev.title,
+    description:'カテゴリ: '+cat.label,
+    colorId: cat.gcalColor,
+    reminders:{ useDefault:false, overrides:[{method:'popup',minutes:30},{method:'email',minutes:60}] },
+  };
+  if(isAll){
+    payload.start={date:ev.date}; payload.end={date:ev.date};
+  } else {
+    payload.start={dateTime:ev.date+'T'+hh+':'+mm+':00+09:00',timeZone:'Asia/Tokyo'};
+    payload.end  ={dateTime:ev.date+'T'+endH+':'+mm+':00+09:00',timeZone:'Asia/Tokyo'};
+  }
+  var key = state.CLAUDE_API_KEY || localStorage.getItem('claude_api_key') || '';
+  var headers = { 'Content-Type':'application/json' };
+  if(key) headers['x-api-key'] = key;
+  var r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST', headers:headers,
+    body:JSON.stringify({
+      model:'claude-sonnet-4-20250514', max_tokens:1000,
+      mcp_servers:[{type:'url',url:'https://gcal.mcp.claude.com/mcp',name:'gcal'}],
+      system:"You are a Google Calendar helper. Use gcal_create_event on calendar 'primary'. After creating the event return ONLY JSON: {\"ok\":true}",
+      messages:[{role:'user',content:'Create this event: '+JSON.stringify(payload)}]
+    })
+  });
+  var d = await r.json();
+  return (d.content||[]).some(function(b){ return b.type==='mcp_tool_result'||(b.text&&b.text.indexOf('"ok"')!==-1); });
+}
+
+// ── チャット送信 ──────────────────────────────────────────────
+async function sendChat() {
+  var text = state.inp.trim();
+  if(!text||state.busy) return;
+  state.inp = '';
+  state.msgs = state.msgs.concat([{role:'user',text:text}]);
+  state.busy = true;
+  render();
+
+  var sys = 'あなたはスケジュール管理AIです。JSONのみ返してください。\n'
+    +'予定追加:{"action":"add","date":"YYYY-MM-DD","title":"...","time":"HH:MM or 終日","category":"window|sales|personal|travel|other","message":"..."}\n'
+    +'会話:{"action":"chat","message":"..."}\n'
+    +'カテゴリ: window=窓リノベ/インプラス/現場/見積/補助金, sales=営業/商談/打合せ, travel=旅行/出張/移動, personal=個人/家族/医療, other=その他\n'
+    +'今日:'+state.today.toISOString().slice(0,10)+' 表示中:'+state.year+'年'+(state.month+1)+'月';
+
+  try {
+    var raw = await askClaude(sys, text);
+    var parsed;
+    try { parsed=JSON.parse(raw); } catch(e) { parsed={action:'chat',message:'もう少し詳しく教えてください。'}; }
+
+    if(parsed.action==='add' && parsed.date) {
+      var nev = {
+        id:'e'+Date.now(), date:parsed.date, title:parsed.title||text,
+        time:parsed.time||'終日', category:parsed.category||'other',
+        synced:false, syncing:true
+      };
+      state.events = state.events.concat([nev]);
+      var baseMsg = (parsed.message||'追加しました！')+'\n📅 Googleカレンダーに同期中...';
+      state.msgs = state.msgs.concat([{role:'ai',text:baseMsg}]);
+      state.busy = false;
+      render();
+
+      try {
+        var ok = await syncToGcal(nev);
+        state.events = state.events.map(function(e){
+          return e.id===nev.id ? Object.assign({},e,{synced:ok,syncing:false}) : e;
+        });
+        var lastIdx = state.msgs.length-1;
+        var lastMsg = state.msgs[lastIdx];
+        state.msgs = state.msgs.slice(0,lastIdx).concat([
+          Object.assign({},lastMsg,{text:lastMsg.text.replace('同期中...', ok?'同期完了 ✅':'同期できませんでした ⚠️')})
+        ]);
+        if(ok) flash('✅ Googleカレンダーにも追加しました！');
+        else    flash('⚠️ アプリには追加。Gcal同期を確認してください',true);
+      } catch(e2) {
+        state.events = state.events.map(function(e){ return e.id===nev.id?Object.assign({},e,{syncing:false}):e; });
+        flash('⚠️ Gcal同期に失敗しました',true);
+      }
+      render();
+      return;
+    } else {
+      state.msgs = state.msgs.concat([{role:'ai',text:parsed.message||'もう少し詳しく教えてください。'}]);
+    }
+  } catch(e) {
+    state.msgs = state.msgs.concat([{role:'ai',text:'エラーが発生しました。もう一度お試しください。'}]);
+  }
+  state.busy = false;
+  render();
+  scrollChat();
+}
+
+function scrollChat() {
+  setTimeout(function(){
+    var cb = document.getElementById('chat-body');
+    if(cb) cb.scrollTop = cb.scrollHeight;
+  }, 50);
+}
+
+// ── APIキー設定 ───────────────────────────────────────────────
+function promptApiKey() {
+  var k = prompt('Claude APIキーを入力してください（sk-ant-...）\n\nこのキーはこのデバイスにのみ保存されます。');
+  if(k && k.startsWith('sk-')) {
+    localStorage.setItem('claude_api_key', k);
+    flash('✅ APIキーを保存しました');
+  }
+}
+
+// ── レンダリング ──────────────────────────────────────────────
+function render() {
+  var app = document.getElementById('app');
+  var dim = daysIn(state.year, state.month);
+  var fd  = firstDow(state.year, state.month);
+  var cells = Math.ceil((fd+dim)/7)*7;
+
+  var html = '';
+
+  // Toast
+  if(state.toast) {
+    html += '<div class="toast '+(state.toast.warn?'warn':'ok')+'">'+state.toast.msg+'</div>';
+  }
+
+  // Header
+  html += '<div class="header">';
+  html += '<div><div class="header-label">MY SCHEDULE</div>';
+  html += '<div class="header-title">'+state.year+'年 '+MONS[state.month]+'</div></div>';
+  html += '<div class="header-right">';
+  html += '<div class="gcal-badge">🔗 Gcal連携</div>';
+  html += '<button class="nav-btn" onclick="prevMonth()">‹</button>';
+  html += '<button class="nav-btn" onclick="nextMonth()">›</button>';
+  html += '</div></div>';
+
+  // How-to banner
+  if(state.showHowto) {
+    html += '<div class="howto">';
+    html += '<button class="howto-close" onclick="closeHowto()">✕</button>';
+    html += '<strong>📱 ホーム画面に追加する方法</strong><br>';
+    html += 'Safari → 共有ボタン（□↑）→「ホーム画面に追加」<br>';
+    html += '<span style="color:#555">※ Chromeでは「ホーム画面に追加」を選択</span>';
+    html += '</div>';
+  }
+
+  // Legend
+  html += '<div class="legend">';
+  for(var k in CATS) {
+    var c = CATS[k];
+    html += '<div class="legend-item" style="background:'+c.bg+';border:1px solid '+c.color+'44;color:'+c.color+';">';
+    html += c.icon+' '+c.label+'</div>';
+  }
+  html += '</div>';
+
+  // Calendar
+  html += '<div class="cal-wrap">';
+  html += '<div class="weekdays">';
+  for(var i=0;i<7;i++){
+    html += '<div class="weekday'+(i===5?' sat':i===6?' sun':'')+'">'+WDAYS[i]+'</div>';
+  }
+  html += '</div><div class="grid">';
+
+  for(var ci=0;ci<cells;ci++){
+    var dn = ci-fd+1;
+    var valid = dn>=1&&dn<=dim;
+    var devs = valid ? getEvs(dn) : [];
+    var sel = valid && state.selDay===dn;
+    var tod = valid && isToday(dn);
+    var wd  = ci%7;
+    var cls = 'day-cell'+(valid?'':' empty')+(tod?' today':'')+(sel?' selected':'');
+    html += '<div class="'+cls+'"'+(valid?(' onclick="selectDay('+dn+')"'):'')+' >';
+    if(valid){
+      var numCls = 'day-num'+(wd===5?' sat-num':wd===6?' sun-num':'');
+      if(tod){
+        html += '<div class="'+numCls+'"><span class="today-circle">'+dn+'</span></div>';
+      } else {
+        html += '<div class="'+numCls+'">'+dn+'</div>';
+      }
+      var shown = devs.slice(0,2);
+      for(var ei=0;ei<shown.length;ei++){
+        var ev = shown[ei];
+        var ec = CATS[ev.category]||CATS.other;
+        html += '<div class="ev-chip" style="background:'+ec.color+';opacity:'+(ev.syncing?'0.6':'1')+'">';
+        if(ev.synced)   html += '<span style="font-size:7px">✓</span>';
+        if(ev.syncing)  html += '<span style="font-size:7px">⟳</span>';
+        html += ev.title+'</div>';
+      }
+      if(devs.length>2) html += '<div class="ev-more">+'+( devs.length-2)+'</div>';
+    }
+    html += '</div>';
+  }
+  html += '</div></div>';
+
+  // Drawer
+  if(state.drawerOpen && state.selDay) {
+    var selEvs = getEvs(state.selDay);
+    html += '<div class="overlay" onclick="closeDrawer()">';
+    html += '<div class="drawer" onclick="event.stopPropagation()">';
+    html += '<div class="drawer-handle"></div>';
+    html += '<div class="drawer-title">'+(state.month+1)+'月'+state.selDay+'日</div>';
+    if(selEvs.length===0){
+      html += '<p style="color:#555;font-size:14px">予定はありません</p>';
+    } else {
+      for(var si=0;si<selEvs.length;si++){
+        var se=selEvs[si], sc=CATS[se.category]||CATS.other;
+        html += '<div class="ev-card" style="border-left-color:'+sc.color+'">';
+        html += '<div class="ev-card-icon">'+sc.icon+'</div>';
+        html += '<div><div class="ev-card-title">'+se.title+'</div>';
+        html += '<div class="ev-card-meta">'+se.time+' · <span class="cat" style="color:'+sc.color+'">'+sc.label+'</span>';
+        if(se.synced)  html += '<span class="synced-badge">● Gcal同期済</span>';
+        if(se.syncing) html += '<span class="syncing-badge">⟳ 同期中</span>';
+        html += '</div></div></div>';
+      }
+    }
+    html += '<button class="add-btn" onclick="openChatForDay()">＋ この日に予定を追加（Gcal自動登録）</button>';
+    html += '</div></div>';
+  }
+
+  // FAB
+  html += '<button class="fab '+(state.chatOpen?'open':'closed')+'" onclick="toggleChat()">'+(state.chatOpen?'✕':'🤖')+'</button>';
+
+  // Chat Panel
+  if(state.chatOpen){
+    html += '<div class="chat-panel">';
+    html += '<div class="chat-head"><span class="chat-head-title">🤖 AIアシスタント</span>';
+    html += '<span class="gcal-badge">Gcal自動登録</span></div>';
+    html += '<div class="chat-body" id="chat-body">';
+    for(var mi=0;mi<state.msgs.length;mi++){
+      var m=state.msgs[mi];
+      html += '<div class="bubble '+m.role+'">'+escHtml(m.text)+'</div>';
+    }
+    if(state.busy) html += '<div class="typing">考え中...</div>';
+    html += '</div>';
+    html += '<div class="chat-foot">';
+    html += '<input class="chat-input" id="chat-input" type="text" placeholder="例：4月15日 10時 現場確認（窓リノベ）" value="'+escHtml(state.inp)+'" oninput="state.inp=this.value" onkeydown="if(event.key===\'Enter\')sendChat()">';
+    html += '<button class="send-btn" onclick="sendChat()" '+(state.busy?'disabled':'')+'>↑</button>';
+    html += '</div></div>';
+  }
+
+  app.innerHTML = html;
+
+  // フォーカス維持
+  if(state.chatOpen){
+    var ci2 = document.getElementById('chat-input');
+    if(ci2 && document.activeElement !== ci2) ci2.focus();
+    scrollChat();
+  }
+}
+
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── イベントハンドラ ──────────────────────────────────────────
+function prevMonth(){
+  if(state.month===0){state.year--;state.month=11;}else{state.month--;}
+  state.selDay=null; render();
+}
+function nextMonth(){
+  if(state.month===11){state.year++;state.month=0;}else{state.month++;}
+  state.selDay=null; render();
+}
+function selectDay(d){
+  state.selDay=d; state.drawerOpen=true; render();
+}
+function closeDrawer(){
+  state.drawerOpen=false; render();
+}
+function toggleChat(){
+  state.chatOpen=!state.chatOpen; render();
+  if(state.chatOpen) setTimeout(function(){
+    var ci=document.getElementById('chat-input'); if(ci) ci.focus();
+  },100);
+}
+function openChatForDay(){
+  state.drawerOpen=false;
+  state.chatOpen=true;
+  state.inp=(state.month+1)+'月'+state.selDay+'日 ';
+  render();
+  setTimeout(function(){
+    var ci=document.getElementById('chat-input');
+    if(ci){ ci.focus(); ci.setSelectionRange(ci.value.length,ci.value.length); }
+    scrollChat();
+  },120);
+}
+function closeHowto(){ state.showHowto=false; render(); }
+
+// ── 初期化 ────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
